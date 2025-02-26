@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools", "wheel", "Cython", 'numpy']
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "where2share"
+version = "0.1"
+authors = [
+    { name = "Felix Jung", email = "felix.jung@tu-dresden.de" },
+    { name = "Philip Marszal", email = "philip.marszal@tu-dresden.de" },
+]
+description = """
+Where2Share project code"""
+keywords = ["research", "physics", "science", "ridepooling", "transport", "mobility"]
+readme = "README.rst"
+requires-python=">=3.10"
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3.10",
+    "Operating System :: POSIX :: Linux",
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    "geopandas",
+    "shapely",
+    "matplotlib",
+    "SQLAlchemy",
+    "tqdm",
+    "osmnx",
+    "networkx",
+    "scipy",
+    "psycopg2-binary",
+    "python-dotenv",
+    "dotmap",
+    "GeoAlchemy2",
+    "fxutil@git+https://github.com/fxjung/fxutil",
+    "contextily",
+    "pygeos >= 0.10",
+    "pyproj",
+]
+
+#    "graph-tool >= 2.59" (not installable via pip)
+
+[project.optional-dependencies]
+dev = [
+    "black[jupyter] == 24.3.0",
+    "pytest",
+    "check-manifest",
+    "pre-commit",
+]
+doc = [
+    "recommonmark",
+    "sphinx",
+    "sphinx-rtd-theme",
+    "sphinx-toggleprompt",
+    "sphinx-autodoc-typehints",
+    "myst-nb",
+]
+
+[project.urls]
+repository = "https://github.com/PhysicsOfMobility/where2share"
+
+#[project.scripts]
+#pf = "paperfridge_client.cli:app"
+
+[tool.setuptools]
+zip-safe = true
+package-dir = { "" = "src"}
+
+[tool.setuptools.packages.find]
+namespaces = true
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.toml"]
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | googletest
+)/
+'''
+
+# NOTE: you have to use single-quoted strings in TOML for regular expressions.
+# It's the equivalent of r-strings in Python.  Multiline strings are treated as
+# verbose regular expressions by Black.  Use [ ] to denote a significant space
+# character.
