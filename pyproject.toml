@@ -35,7 +35,7 @@ dependencies = [
     "python-dotenv",
     "dotmap",
     "GeoAlchemy2",
-    "fxutil@git+https://github.com/fxjung/fxutil",
+    "fxutil",
     "contextily",
     "pygeos >= 0.10",
     "pyproj",
