@@ -432,7 +432,7 @@ class DemandGenerator:
 
         # Transform nodes to a new coordinate system and create Voronoi cells
         if not "maxspeed" in edges.columns:
-            edges["maxspeed"]=50.0 # Default value which would be imputed anyway
+            edges["maxspeed"] = 50.0  # Default value which would be imputed anyway
         nodes = cls._voronoi_cells(nodes.to_crs("EPSG:25832"), edges)
 
         # Transform population data to the same coordinate system
@@ -552,7 +552,7 @@ class DemandGenerator:
             Pmat[n2i[n], [n2i[v2n[i]] for i in range(len(G.nodes))]] = parr.astype(
                 np.float32
             )
-        
+
         # Tmat,sigma, optimal_delay_factor, missing_travel_time = self._trip_matrix(nodes, Dmat)
         # Dmat*=optimal_delay_factor
         # Amat*=optimal_delay_factor
@@ -565,26 +565,40 @@ class DemandGenerator:
 
         network_measures = dict(
             average_distance=np.mean(Dmat) * (len(Dmat) / (len(Dmat) - 1)),
-            average_weighted_distance= np.sum(Dmat*Tmat) / np.sum(Tmat) if Tmat is not None else np.mean(Dmat) * (len(Dmat) / (len(Dmat) - 1)),
+            average_weighted_distance=(
+                np.sum(Dmat * Tmat) / np.sum(Tmat)
+                if Tmat is not None
+                else np.mean(Dmat) * (len(Dmat) / (len(Dmat) - 1))
+            ),
             number_of_nodes=len(Dmat),
             number_of_edges=np.sum(Amat > 0),
             average_edge_length=np.mean(Amat),
             diameter=np.max(Dmat),
             length_of_network=np.sum(Amat),
             length_of_all_shortest_paths=np.sum(Dmat),
-            pseudo_ellipse_volume_at_10=self.pseudo_ellipse_volume(Dmat, Amat) if Tmat is not None else 0,
-            pseudo_sphere_volumes=[
-                self.pseudo_sphere_volume(m, Dmat, Amat)
-                for m in list(np.linspace(1, 9, 9))
-                + list(np.linspace(10, 30, 6))
-                + list(np.linspace(30, 60, 3))
-            ] if Tmat is not None else [],
+            pseudo_ellipse_volume_at_10=(
+                self.pseudo_ellipse_volume(Dmat, Amat) if Tmat is not None else 0
+            ),
+            pseudo_sphere_volumes=(
+                [
+                    self.pseudo_sphere_volume(m, Dmat, Amat)
+                    for m in list(np.linspace(1, 9, 9))
+                    + list(np.linspace(10, 30, 6))
+                    + list(np.linspace(30, 60, 3))
+                ]
+                if Tmat is not None
+                else []
+            ),
             r0_values=self.get_r0_grid(Dmat, Tmat) if Tmat is not None else {},
-            taylor={
-                "sigma0": self._f_gamma(0, Dmat, Onorm),
-                "sigma-1": self._f_gamma(-1, Dmat, Onorm),
-                "sigma-2": self._f_gamma(-2, Dmat, Onorm),
-            } if Tmat is None else {},
+            taylor=(
+                {
+                    "sigma0": self._f_gamma(0, Dmat, Onorm),
+                    "sigma-1": self._f_gamma(-1, Dmat, Onorm),
+                    "sigma-2": self._f_gamma(-2, Dmat, Onorm),
+                }
+                if Tmat is None
+                else {}
+            ),
         )
 
         # Return the adjacency, distance, predecessor, and trip probability matrices
@@ -994,9 +1008,15 @@ class DemandGenerator:
         # origins = np.sum(Tmat, axis=1)
         trips = np.sum(Tmat)
         md = np.mean(Dmat)
-        Ts = np.einsum("ij->i", Tmat)/trips
+        Ts = np.einsum("ij->i", Tmat) / trips
         for Bi in 2 ** np.arange(0, 14, 1):
-            for c in np.concatenate([np.linspace(0.0*md,0.5*md,9)[:-1],np.linspace(0.5*md,1.0*md,5)[:-1],np.linspace(1*md, 4.0 * md, 5)]):
+            for c in np.concatenate(
+                [
+                    np.linspace(0.0 * md, 0.5 * md, 9)[:-1],
+                    np.linspace(0.5 * md, 1.0 * md, 5)[:-1],
+                    np.linspace(1 * md, 4.0 * md, 5),
+                ]
+            ):
                 V = self._get_volume(Dmat, c)
                 r0 = self._get_r0(Ts, V, Bi)
                 if c in r0_mods["r0_values"].keys():
@@ -1181,7 +1201,11 @@ class PTDemandGenerator(DemandGenerator):
 
         network_measures = dict(
             average_distance=np.mean(Dmat) * (len(Dmat) / (len(Dmat) - 1)),
-            average_weighted_distance= np.sum(Dmat*Tmat) / np.sum(Tmat) if Tmat is not None else np.mean(Dmat) * (len(Dmat) / (len(Dmat) - 1)),
+            average_weighted_distance=(
+                np.sum(Dmat * Tmat) / np.sum(Tmat)
+                if Tmat is not None
+                else np.mean(Dmat) * (len(Dmat) / (len(Dmat) - 1))
+            ),
             number_of_nodes=len(Dmat),
             number_of_edges=np.sum(Amat > 0),
             average_edge_length=np.mean(Amat),

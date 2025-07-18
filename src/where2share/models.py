@@ -303,7 +303,7 @@ class PerformanceOracle:
         fleets = np.zeros_like(target_loads) * np.nan
         for i, qi in enumerate(target_loads):
             actual_load = qi
-            fleet_size = max([request_rate / qi * average_distance,1])
+            fleet_size = max([request_rate / qi * average_distance, 1])
             r0 = np.min(
                 [
                     np.max(
@@ -341,7 +341,7 @@ class PerformanceOracle:
             actual_loads[i] = actual_load
             fleets[i] = fleet_size
             if fleet_size <= 1.0:
-                for j in range(i+1,len(target_loads)):
+                for j in range(i + 1, len(target_loads)):
                     rejections[j] = rejection_rate
                     actual_loads[j] = actual_load
                     fleets[j] = fleet_size
@@ -352,10 +352,21 @@ class PerformanceOracle:
         of the average distance to the nearest bus.
         """
         # taxi_service_distance = 1 + average_distance ** (-fleets+1)
-        taxi_service_distance = 1 + fleets**(-1/2) #(average_distance ** (-(fleets)+1)
-        taxi_indicator = int(
-            np.arange(len(actual_loads))[1 / actual_loads < taxi_service_distance][0]
-        ) if len(np.arange(len(actual_loads))[1 / actual_loads < taxi_service_distance])>0 else 0 # At what point does the system behave like a taxi?
+        taxi_service_distance = 1 + fleets ** (
+            -1 / 2
+        )  # (average_distance ** (-(fleets)+1)
+        taxi_indicator = (
+            int(
+                np.arange(len(actual_loads))[1 / actual_loads < taxi_service_distance][
+                    0
+                ]
+            )
+            if len(
+                np.arange(len(actual_loads))[1 / actual_loads < taxi_service_distance]
+            )
+            > 0
+            else 0
+        )  # At what point does the system behave like a taxi?
         relative_driven_distance = (
             np.min(np.stack([1 / actual_loads, taxi_service_distance], axis=1), axis=1)
             + rejections
@@ -379,9 +390,7 @@ class PerformanceOracle:
         plotting_data[0, 2] = 1
         plotting_data[0, 3] = 0
         plotting_data[0, 4] = pop / 2
-        plotting_data[1:, 5] = (1 / actual_loads < taxi_service_distance).astype(
-            int
-        )
+        plotting_data[1:, 5] = (1 / actual_loads < taxi_service_distance).astype(int)
         plotting_data[0, 5] = 0
         return plotting_data
 
