@@ -19,8 +19,9 @@ from collections import defaultdict
 from scipy.spatial import Voronoi
 from shapely.geometry import Point, LineString, Polygon
 from shapely.ops import nearest_points
+from shapely import to_wkb
 from tqdm.auto import tqdm
-from sqlalchemy import URL, create_engine, Engine
+from sqlalchemy import URL, create_engine, Engine, text
 from pathlib import Path
 from datetime import datetime
 
@@ -210,7 +211,8 @@ class DemandGenerator:
         edges.crs = "EPSG:25832"
         nodes.crs = "EPSG:25832"
         return nodes, edges
-
+        
+    
     @ft.lru_cache(maxsize=10)
     def extract_graph(
         self, geographical_name: str, ars: bool = False, table_name: str = "kreise"
@@ -266,7 +268,60 @@ class DemandGenerator:
         nodes["x"] = nodes.geometry.x
         nodes["y"] = nodes.geometry.y
         return nodes, edges
+        
+    @ft.lru_cache(maxsize=10)
+    def extract_graph_from_geometry(
+        self, g: str
+    ) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+        """
+        Extracts a graph from a given geometry, simplifies it, calculates
+        travel times, and maps population data onto its nodes.
 
+        This function reads boundaries, nodes, edges, and population data from a PostGIS
+        database for a given geographical area. It then constructs a graph from the
+        nodes and edges, simplifies it, and calculates edge speeds and travel times.
+        Additionally, it maps population data onto the nodes of the graph.
+
+        Parameters
+        ----------
+        g geometry
+            geometry in wkb hex format including the srid
+        ars
+            If True, the 'amtlicher_regierungs_schluessel' is used as the column name
+            for the geographical area in the database. If False, 'geografischer_name'
+            is used. Defaults to False.
+        table_name
+            The name of the database table to extract the graph from. Defaults to
+            ``kreise``.
+
+        Returns
+        -------
+        nodes
+            A GeoDataFrame of nodes, updated with population data.
+            Coordinates in UTM32N (EPSG:25832).
+        edges
+            A GeoDataFrame of edges, updated with travel times.
+        """
+        log.info(f"Extracting graph for geometry...")
+
+        # Read data from PostGIS database
+        boundary, nodes, edges, population = self._read_data_from_geometry(
+            g, 
+        )
+        if not (len(nodes) and len(edges)):
+            raise ValueError(
+                f"No data found"
+            )
+        nodes, edges = self._preprocess_graph(nodes, edges)
+        nodes, edges = self._ancillary_nodes(nodes, edges)
+        nodes = self._map_population(nodes, edges, population)
+
+        nodes = nodes.drop(labels=["x", "y"], axis=1)
+        nodes["x"] = nodes.geometry.x
+        nodes["y"] = nodes.geometry.y
+        return nodes, edges
+        
+        
     @staticmethod
     def get_graph_and_node_index(
         nodes: gpd.GeoDataFrame, edges: gpd.GeoDataFrame
@@ -819,17 +874,122 @@ class DemandGenerator:
         edges = self.fetch_edges(
             geographical_name=geographical_name, column=column, table=table
         )
-
+        sql = f"""
+        WITH b_one AS (
+          SELECT geometry
+          FROM {table}
+          WHERE {column} = %s
+        )
+        SELECT a.*
+        FROM kontur_de a
+        JOIN (
+          SELECT ST_Transform(
+                   ST_Buffer(ST_Transform(geometry, 25832), 250), 4326
+                 ) AS geom_buf_4326
+          FROM b_one
+        ) b
+        ON ST_Intersects(a.geometry, b.geom_buf_4326);
+        """
         population = gpd.read_postgis(
-            f"SELECT a.* FROM kontur_de a JOIN {table} b "
-            f"ON ST_Intersects(a.geometry, b.geometry) "
-            f"WHERE b.{column}='{geographical_name}';",
+            # f"SELECT a.* FROM kontur_de a JOIN {table} b "
+            # f"""ON ST_Intersects(
+            #     a.geometry, 
+            #     ST_Transform(ST_Buffer(ST_Transform(b.geometry,25832),250),4326),
+            #     ) """
+            # f"WHERE b.{column}='{geographical_name}';",
+            sql,
             con=self.engine,
             geom_col="geometry",
         )
 
         return boundary, nodes, edges, population
 
+    def _read_data_from_geometry(
+            self, g: str,
+        ) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame, gpd.GeoDataFrame, gpd.GeoDataFrame]:
+            """
+            Reads nodes, edges, and population data from the PostGIS database
+            for the geometry specified.
+    
+            Parameters
+            ----------
+            g
+                geometry in wkb hex format including the srid.
+            column
+                Column to use to identify the geographical area. Suitable values are
+                likely 'geografischer_name' or 'amtlicher_regierungsschluessel'.
+            table
+                The name of the table to extract the data from. Suitable values are
+                likely 'kreise' or 'pendel_zonen'.
+    
+            Returns
+            -------
+            boundary
+                A GeoDataFrame representing the boundary of the geographical area.
+            nodes
+                A GeoDataFrame representing the OSM nodes within the geographical area.
+            edges
+                 A GeoDataFrame representing the OSM edges within the geographical area.
+            population
+                A GeoDataFrame representing the population within the geographical area.
+    
+            """
+            log.info(
+                f"Retrieving data from geometry "
+                f"..."
+            )
+    
+
+    
+            wkb = g #to_wkb(g,hex=True, include_srid=True)
+    
+            nodes = gpd.read_postgis(
+                text("""
+                    SELECT a.* FROM graph_nodes a
+                    WHERE ST_Intersects(
+                    a.geometry,
+                    ST_GeomFromWKB(decode( :wkb, 'hex'))
+                    );
+                    """),
+                con=self.engine,
+                params={"wkb":wkb},
+                geom_col="geometry",
+            )
+
+            edge_sql = text("""
+            SELECT a.* FROM graph_edges a
+            WHERE ST_Intersects(
+                    a.geometry,
+                    ST_GeomFromWKB(decode( :wkb, 'hex'))
+                    );
+            """)
+            edges = gpd.read_postgis(
+                edge_sql,
+                params={"wkb":wkb},
+                con=self.engine,
+                geom_col="geometry",
+            )
+    
+            # edges = self.fetch_edges(
+            #     geographical_name=geographical_name, column=column, table=table
+            # )
+            sql = text(f"""
+            
+            SELECT a.*
+            FROM kontur_de a
+            WHERE ST_Intersects(
+                a.geometry,
+                ST_Transform(ST_Buffer(ST_Transform(ST_GeomFromWKB(decode( :wkb, 'hex')),25832),250),4326)
+            );
+            """)
+            population = gpd.read_postgis(
+                sql,
+                con=self.engine,
+                params={"wkb":wkb},
+                geom_col="geometry",
+            )
+    
+            return g, nodes, edges, population
     def _preprocess_graph(
         self, nodes: gpd.GeoDataFrame, edges: gpd.GeoDataFrame
     ) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
