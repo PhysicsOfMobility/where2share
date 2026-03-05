@@ -250,7 +250,7 @@ class ResidualBoostingModel(BaseEstimator, RegressorMixin):
     def set_theory_model(self, model):
         self.theory_model = model
 
-class NewPerformanceOracle:
+class PerformanceOracle:
     """
     Performance oracle backed by the new feature-restricted boosting model.
 
@@ -427,7 +427,7 @@ class RidepoolingCosts:
         self.gamma_T = gamma_T
         self.gamma_L = gamma_L
         # ---- Use the new oracle ----
-        self.Oracle = NewPerformanceOracle(model_file=modelfile)
+        self.Oracle = PerformanceOracle(model_file=modelfile)
 
     # linear_utility_function stays the same ...
 
