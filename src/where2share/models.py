@@ -44,6 +44,7 @@ class helpers:
         return the differential equation.
         with the most recent version of the model $r_0$ will always be 0,
         because its effect is absorbed into the diffusion statistics.
+        (I think this has a factor 4 too much in it! This will result in a D which cancels this factor out)
         """
         return -r*(2*(f)*r - 4*(f)*r_0 - 4*r**2/3 + 2*r*r_0)
     @staticmethod
@@ -52,13 +53,13 @@ class helpers:
         proportional to the probability distribution of r
         derived from potential and fokker planck
         """
-        return np.exp(-potential(r,f,r_0)/D)
+        return np.exp(-helpers.potential(r,f,r_0)/D)
     @staticmethod
     def log_prob_r(r, f, r_0, D):
         """
         see above
         """
-        return -potential(r,f,r_0)/D
+        return -helpers.potential(r,f,r_0)/D
     @staticmethod
     def log_sum_exp(log_x):
         """
@@ -79,13 +80,13 @@ class helpers:
         epsilon[r_0>0] = 0.0
     
         r = np.linspace(epsilon, 1, 1000)[:, None]
-        f = fp_eq(q,r_0,qc,a,b)
-        log_p = log_prob_r(r, f, r_0, D)
+        f = helpers.fp_eq(q,r_0,qc,a,b)
+        log_p = helpers.log_prob_r(r, f, r_0, D)
     
-        log_weighted_sum_r = log_sum_exp(np.log(r) + log_p)
+        log_weighted_sum_r = helpers.log_sum_exp(np.log(r) + log_p)
         
     
-        log_sum_p = log_sum_exp(log_p)
+        log_sum_p = helpers.log_sum_exp(log_p)
         
         r_mean_value = np.exp(log_weighted_sum_r - log_sum_p)
         return r_mean_value
