@@ -7,6 +7,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.svm import SVR
 from sklearn.preprocessing import StandardScaler
 from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin
+from xgboost import XGBRegressor
 
 from scipy.optimize import minimize
 

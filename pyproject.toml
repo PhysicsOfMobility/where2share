@@ -37,7 +37,9 @@ dependencies = [
     "GeoAlchemy2",
     "fxutil",
     "contextily",
-    "pygeos >= 0.10",
+#    "pygeos >= 0.10",
+    "xgboost",
+    "scikit-learn",
     "pyproj",
 ]
 
