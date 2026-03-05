@@ -38,7 +38,7 @@ dependencies = [
     "fxutil",
     "contextily",
 #    "pygeos >= 0.10",
-    "xgboost",
+    "xgboost = 3.0.0",
     "scikit-learn",
     "pyproj",
 ]
