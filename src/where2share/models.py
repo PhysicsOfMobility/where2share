@@ -160,6 +160,8 @@ class CustomModel(BaseEstimator, RegressorMixin, TransformerMixin):
     describe these.
     The parameters are fitted using huber loss minimization, which is more robust to outliers.
 
+    features: ['constraint', 'default_rejections', 'load', 'network_diameter', 'network_edges',
+       'number_of_transporters']
     """
     def __init__(self, loss="huber"):
         self.loss = loss
@@ -169,7 +171,7 @@ class CustomModel(BaseEstimator, RegressorMixin, TransformerMixin):
         """
         parametrized model of the critical load
         """
-        B, Dia, c = X[:, 15], X[:, 8], X[:, 0]
+        B, Dia, c = X[:, 5], X[:, 3], X[:, 0]
         return p[0] * np.log(1 + c * B / Dia) + p[1]
 
     def _beta_mod(self, X, p):
@@ -177,7 +179,7 @@ class CustomModel(BaseEstimator, RegressorMixin, TransformerMixin):
         parametrized model of the cherry picking exponent beta.
         Depends on the critical load.
         """
-        B, Dia, c, nedges = X[:, 15], X[:, 8], X[:, 0], X[:, 10]
+        B, Dia, c, nedges = X[:, 5], X[:, 3], X[:, 0], X[:, 4]
         pseudo_qc = p[0] * np.log(1 + c * B / Dia) + p[1]
         xbeta = pseudo_qc / np.sqrt(nedges)
         return p[2] * xbeta + p[3]
@@ -192,7 +194,7 @@ class CustomModel(BaseEstimator, RegressorMixin, TransformerMixin):
         matches the default rejections r_0, on finds an expression for D, which needs 
         to scale very specifically with q to achieve the r_0 rejection rate.
         """
-        q, B, r0 = X[:, 2], X[:, 15], X[:, 1]
+        q, B, r0 = X[:, 2], X[:, 5], X[:, 1]
         qc = self._crit_load(X, p)
         Beta = self._beta_mod(X, p)
         D = 2 * np.pi * r0**2 * (np.abs(qc / q))**(1 - Beta) + 1e-6
@@ -211,6 +213,9 @@ class CustomModel(BaseEstimator, RegressorMixin, TransformerMixin):
             return np.sum((y - yp)**2)
 
     def fit(self, X, y):
+        for col in X.columns:
+            assert col in ['constraint', 'default_rejections', 'load', 'network_diameter', 'network_edges',
+       'number_of_transporters']
         X = np.array(X)
         y = np.array(y).ravel()
         p0 = np.ones(4)
@@ -227,25 +232,81 @@ class CustomModel(BaseEstimator, RegressorMixin, TransformerMixin):
 
 class ResidualBoostingModel(BaseEstimator, RegressorMixin):
     """
-    Boost the predictionf of the theoretical model.
-    """
-    def __init__(self, boosting_model):
-        self.boosting_model = boosting_model
-        self.theory_model = None
+    Boost the prediction of the theoretical model.
 
+    Input is expected to have the following features:
+    'constraint',
+    'default_rejections',
+    'load',
+    'network_diameter',
+    'network_distance',
+    'network_edges',
+    'network_nodes',
+    'number_of_transporters'
+    
+    """
+    def __init__(self, boosting_model, theory_model, ignore_columns = []):
+        self.boosting_model = boosting_model
+        self.theory_model = theory_model
+        self.ignore_columns = ignore_columns
+        self.boosting_columns = ['constraint',
+                                 'default_rejections',
+                                 'load',
+                                 'network_diameter',
+                                 'network_distance',
+                                 'network_edges',
+                                 'network_nodes',
+                                 'number_of_transporters'
+                                ]
+        if self.ignore_columns:
+            self.boosting_columns = [x for x in self.boosting_columns if not x in self.ignore_columns]
+        self.theory_columns = ['constraint', 
+                               'default_rejections', 
+                               'load', 
+                               'network_diameter',
+                               'network_edges',
+                               'number_of_transporters'
+                                ]
+        self._renaming_schema = {
+            'average_distance':'network_distance',
+            'number_of_nodes':'network_nodes',
+            'number_of_edges':'network_edges',
+            'diameter':'network_diameter'
+        }
+    def _rename_columns(self, X):
+        X_new = X.copy()
+        X_new.columns = [self._renaming_schema[x] if x in self._renaming_schema else x  for x in X_new.columns]
+        return X_new
     def fit(self, X, y):
-        self.theory_model.fit(X,y)
-        if self.theory_model is None:
-            raise ValueError("Call set_theory_model(...) with a fitted model before fit().")
-        self.theory_pred = self.theory_model.predict(X)
-        residuals = y - self.theory_pred
-        self.boosting_model.fit(X, residuals)
+        # First take care of column names:
+        X_new = self._rename_columns(X)
+       #  for col in X_new.columns:
+       #      assert col in ['constraint', 'default_rejections', 'load', 'network_diameter', 'network_edges',
+       # 'number_of_transporters'], f"{col} unexpected"
+            
+        self.theory_model.fit(X_new.loc[:,self.theory_columns],y)
+        theory_pred = self.theory_model.predict(X_new.loc[:,self.theory_columns])
+        residuals = y - theory_pred
+        self.boosting_model.fit(X_new.loc[:,self.boosting_columns], residuals)
         return self
 
     def predict(self, X):
-        theory_pred = self.theory_model.predict(X)
-        residual_pred = self.boosting_model.predict(X)
-        return theory_pred + residual_pred
+        X_new = self._rename_columns(X)
+        theory_pred = self.theory_model.predict(X_new.loc[:,self.theory_columns])
+        residual_pred = self.boosting_model.predict(X_new.loc[:,self.boosting_columns])
+        prediction = (theory_pred + residual_pred)
+        return prediction*(prediction>=0)*(prediction<=1)+(prediction>1).astype(float)
+        
+    def _theory_predict(self, X):
+        X_new = self._rename_columns(X)
+        theory_pred = self.theory_model.predict(X_new.loc[:,self.theory_columns])
+        # residual_pred = self.boosting_model.predict(X_new.loc[:,self.boosting_columns])
+        return theory_pred
+    def _residual_predict(self, X):
+        X_new = self._rename_columns(X)
+        theory_pred = self.theory_model.predict(X_new.loc[:,self.theory_columns])
+        residual_pred = self.boosting_model.predict(X_new.loc[:,self.boosting_columns])
+        return residual_pred
 
     def set_theory_model(self, model):
         self.theory_model = model
